@@ -238,7 +238,7 @@ class MockDatabaseService implements DatabaseService {
   @override
   Stream<List<ProviderProfile>> getNearbyProvidersStream(double userLat, double userLng, String category) {
     // Create immediate search yield
-    final controller = StreamController<List<ProviderProfile>>();
+    final controller = StreamController<List<ProviderProfile>>.broadcast();
     getNearbyProviders(userLat, userLng, category).then((list) {
       if (!controller.isClosed) {
         controller.add(list);
@@ -246,7 +246,7 @@ class MockDatabaseService implements DatabaseService {
     });
     
     // Listen to changes
-    _providersStreamController.stream.listen((allProviders) {
+    final subscription = _providersStreamController.stream.listen((allProviders) {
       List<ProviderProfile> matched = [];
       for (var p in allProviders) {
         if ((category.isEmpty || p.category.toLowerCase() == category.toLowerCase()) && p.isVerified) {
@@ -259,6 +259,10 @@ class MockDatabaseService implements DatabaseService {
         controller.add(matched);
       }
     });
+
+    controller.onCancel = () {
+      subscription.cancel();
+    };
 
     return controller.stream;
   }

@@ -5,14 +5,26 @@ import '../../../core/providers/global_providers.dart';
 import 'booking_tracking_screen.dart';
 import '../../chat/presentation/chat_screen.dart';
 
-class MyBookingsScreen extends ConsumerWidget {
+class MyBookingsScreen extends ConsumerStatefulWidget {
   final String customerId;
   const MyBookingsScreen({super.key, required this.customerId});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final dbSvc = ref.watch(databaseServiceProvider);
-    
+  ConsumerState<MyBookingsScreen> createState() => _MyBookingsScreenState();
+}
+
+class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen> {
+  late Stream<List<Booking>> _bookingsStream;
+
+  @override
+  void initState() {
+    super.initState();
+    final dbSvc = ref.read(databaseServiceProvider);
+    _bookingsStream = dbSvc.getCustomerBookingsStream(widget.customerId);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return DefaultTabController(
       length: 2,
       child: Scaffold(
@@ -26,7 +38,7 @@ class MyBookingsScreen extends ConsumerWidget {
           ),
         ),
         body: StreamBuilder<List<Booking>>(
-          stream: dbSvc.getCustomerBookingsStream(customerId),
+          stream: _bookingsStream,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());

@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'core/theme/theme.dart';
-import 'core/providers/global_providers.dart';
-import 'core/models/models.dart';
-import 'features/auth/presentation/role_selection_screen.dart';
-import 'features/home/presentation/home_screen.dart';
-import 'features/provider/presentation/provider_dashboard_screen.dart';
-import 'features/admin/presentation/admin_dashboard_screen.dart';
+import 'features/auth/presentation/splash_screen.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   runApp(
     const ProviderScope(
       child: MyApp(),
@@ -22,31 +22,13 @@ class MyApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final currentUser = ref.watch(authStateProvider);
-
     return MaterialApp(
       title: 'Fixora',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
-      themeMode: ThemeMode.system, // Automatically matches the system theme (Light/Dark)
-      home: _getLandingPage(currentUser),
+      themeMode: ThemeMode.dark, // Enforce dark first design always
+      home: const SplashScreen(),
     );
-  }
-
-  Widget _getLandingPage(AppUser? user) {
-    if (user == null) {
-      return const RoleSelectionScreen();
-    }
-    
-    // Redirect according to active user role
-    switch (user.role) {
-      case UserRole.customer:
-        return const HomeScreen();
-      case UserRole.provider:
-        return const ProviderDashboardScreen();
-      case UserRole.admin:
-        return const AdminDashboardScreen();
-    }
   }
 }

@@ -1,0 +1,53 @@
+name: Build and Push APK
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build Debug APK
+        run: flutter build apk --debug
+
+      - name: Build Release APK
+        run: flutter build apk --release
+
+      - name: Copy and Zip APKs to apks/ folder
+        run: |
+          mkdir -p apks
+          zip -j apks/app-debug.zip build/app/outputs/flutter-apk/app-debug.apk
+          if [ -f build/app/outputs/flutter-apk/app-release.apk ]; then
+            zip -j apks/app-release.zip build/app/outputs/flutter-apk/app-release.apk
+          else
+            zip -j apks/app-release.zip build/app/outputs/flutter-apk/app-release-unsigned.apk
+          fi
+
+      - name: Commit and Push APKs
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add apks/
+          git diff --quiet && git diff --staged --quiet || (git commit -m "build: automatic apk update [skip ci]" && git push origin main)

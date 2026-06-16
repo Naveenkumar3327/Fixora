@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import '../../../core/models/models.dart';
 import '../../../core/providers/global_providers.dart';
+import '../../../core/theme/theme.dart';
 
 class BookingTrackingScreen extends ConsumerStatefulWidget {
   final String bookingId;
@@ -19,19 +21,23 @@ class _TrackerPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    // 1. Draw Grid Backdrop
+    final gridPaint = Paint()
+      ..color = Colors.white.withOpacity(0.04)
+      ..strokeWidth = 1;
+    for (double x = 0; x < size.width; x += 30) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
+    }
+    for (double y = 0; y < size.height; y += 30) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+    }
+
     final start = Offset(size.width * 0.15, size.height * 0.7);
     final end = Offset(size.width * 0.85, size.height * 0.3);
 
     // Route line paint
     final routePaint = Paint()
-      ..color = Colors.grey.withOpacity(0.3)
-      ..strokeWidth = 4
-      ..strokeCap = StrokeCap.round
-      ..style = PaintingStyle.stroke;
-
-    // Travelled route paint
-    final travelledPaint = Paint()
-      ..color = const Color(0xFF6366F1)
+      ..color = Colors.white.withOpacity(0.08)
       ..strokeWidth = 4
       ..strokeCap = StrokeCap.round
       ..style = PaintingStyle.stroke;
@@ -42,9 +48,9 @@ class _TrackerPainter extends CustomPainter {
     // Calculate provider movement progress based on status
     double progress = 0.0;
     if (status == BookingStatus.onTheWay) {
-      progress = 0.1 + (animationProgress * 0.4); // starts moving
+      progress = 0.1 + (animationProgress * 0.4); 
     } else if (status == BookingStatus.inProgress) {
-      progress = 0.6 + (animationProgress * 0.35); // arrived, working
+      progress = 0.6 + (animationProgress * 0.35); 
     } else if (status == BookingStatus.completed) {
       progress = 1.0;
     }
@@ -54,33 +60,60 @@ class _TrackerPainter extends CustomPainter {
         start.dx + (end.dx - start.dx) * progress,
         start.dy + (end.dy - start.dy) * progress,
       );
+
+      // Travelled route paint
+      final travelledPaint = Paint()
+        ..shader = const LinearGradient(
+          colors: [AppTheme.primaryColor, AppTheme.secondaryColor],
+        ).createShader(Rect.fromPoints(start, end))
+        ..strokeWidth = 4
+        ..strokeCap = StrokeCap.round
+        ..style = PaintingStyle.stroke;
+
       canvas.drawLine(start, currentOffset, travelledPaint);
 
-      // Draw provider/vehicle marker
-      final markerPaint = Paint()..color = const Color(0xFF06B6D4);
+      // Draw pulsing waves under vehicle marker
       final pulsePaint = Paint()
-        ..color = const Color(0xFF06B6D4).withOpacity(0.3)
+        ..color = AppTheme.primaryColor.withOpacity(0.25 * (1.0 - animationProgress))
+        ..style = PaintingStyle.fill;
+      canvas.drawCircle(currentOffset, 18 * (1.0 + animationProgress * 0.4), pulsePaint);
+
+      // Draw provider/vehicle marker
+      final markerPaint = Paint()..color = AppTheme.primaryColor;
+      canvas.drawCircle(currentOffset, 8, markerPaint);
+
+      final markerBorder = Paint()
+        ..color = Colors.white
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2;
-
-      canvas.drawCircle(currentOffset, 12 * (1.0 + animationProgress * 0.3), pulsePaint);
-      canvas.drawCircle(currentOffset, 7, markerPaint);
+      canvas.drawCircle(currentOffset, 8, markerBorder);
     }
 
     // Draw Customer Marker
-    final custPaint = Paint()..color = const Color(0xFFF43F5E);
+    final custGlow = Paint()
+      ..color = AppTheme.successColor.withOpacity(0.4)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+    canvas.drawCircle(end, 14, custGlow);
+
+    final custPaint = Paint()..color = AppTheme.successColor;
     canvas.drawCircle(end, 8, custPaint);
+
+    final custBorder = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    canvas.drawCircle(end, 8, custBorder);
 
     // Label customer house
     final textPainter = TextPainter(
       text: const TextSpan(
         text: "YOU",
-        style: TextStyle(color: Color(0xFFF43F5E), fontWeight: FontWeight.bold, fontSize: 10),
+        style: TextStyle(color: AppTheme.successColor, fontWeight: FontWeight.w900, fontSize: 10, letterSpacing: 0.5),
       ),
       textDirection: TextDirection.ltr,
     );
     textPainter.layout();
-    textPainter.paint(canvas, end + const Offset(-10, -22));
+    textPainter.paint(canvas, end + const Offset(-10, -24));
   }
 
   @override
@@ -91,6 +124,7 @@ class _TrackerPainter extends CustomPainter {
 
 class _BookingTrackingScreenState extends ConsumerState<BookingTrackingScreen> with SingleTickerProviderStateMixin {
   late AnimationController _animController;
+  late Stream<Booking?> _bookingStream;
 
   @override
   void initState() {
@@ -99,6 +133,8 @@ class _BookingTrackingScreenState extends ConsumerState<BookingTrackingScreen> w
       vsync: this,
       duration: const Duration(seconds: 4),
     )..repeat(reverse: true);
+    final dbSvc = ref.read(databaseServiceProvider);
+    _bookingStream = dbSvc.getBookingStream(widget.bookingId);
   }
 
   @override
@@ -112,154 +148,155 @@ class _BookingTrackingScreenState extends ConsumerState<BookingTrackingScreen> w
     final dbSvc = ref.watch(databaseServiceProvider);
 
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
         title: const Text("Track Provider"),
       ),
-      body: StreamBuilder<Booking?>(
-        stream: dbSvc.getBookingStream(widget.bookingId),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+      body: PremiumBackground(
+        child: StreamBuilder<Booking?>(
+          stream: _bookingStream,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
 
-          final booking = snapshot.data;
-          if (booking == null) {
-            return const Center(child: Text("Booking details not found."));
-          }
+            final booking = snapshot.data;
+            if (booking == null) {
+              return const Center(child: Text("Booking details not found."));
+            }
 
-          return Column(
-            children: [
-              // Interactive Animated Progress Map
-              Expanded(
-                flex: 3,
-                child: Container(
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? const Color(0xFF1E293B)
-                      : const Color(0xFFF1F5F9),
-                  child: Stack(
-                    children: [
-                      AnimatedBuilder(
-                        animation: _animController,
-                        builder: (context, child) {
-                          return CustomPaint(
-                            size: Size.infinite,
-                            painter: _TrackerPainter(
-                              animationProgress: _animController.value,
-                              status: booking.status,
-                            ),
-                          );
-                        },
-                      ),
-                      Positioned(
-                        top: 20,
-                        left: 20,
-                        right: 20,
-                        child: Card(
-                          elevation: 2,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.info_outline, color: Color(0xFF6366F1)),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    _getInstructionMessage(booking.status),
-                                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              // Bottom Sheet with Status Timeline
-              Expanded(
-                flex: 4,
-                child: Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).cardTheme.color,
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(24),
-                      topRight: Radius.circular(24),
+            return Column(
+              children: [
+                const SizedBox(height: 100),
+                // Cyber Progress Map Tracker
+                Expanded(
+                  flex: 3,
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 20),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: Colors.white.withOpacity(0.08)),
                     ),
-                    boxShadow: [
-                      BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -5))
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(24),
+                      child: Stack(
                         children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                booking.providerBusinessName,
-                                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                "Category: ${booking.category}",
-                                style: const TextStyle(fontSize: 13, color: Colors.grey),
-                              ),
-                            ],
-                          ),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              const Text("EST. DURATION", style: TextStyle(fontSize: 10, color: Colors.grey)),
-                              Text(
-                                _getEtaValue(booking.status),
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: Theme.of(context).colorScheme.primary,
+                          AnimatedBuilder(
+                            animation: _animController,
+                            builder: (context, child) {
+                              return CustomPaint(
+                                size: Size.infinite,
+                                painter: _TrackerPainter(
+                                  animationProgress: _animController.value,
+                                  status: booking.status,
                                 ),
+                              );
+                            },
+                          ),
+                          Positioned(
+                            top: 16,
+                            left: 16,
+                            right: 16,
+                            child: GlassCard(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              borderRadius: 14,
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.info_outline, color: AppTheme.primaryColor),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      _getInstructionMessage(booking.status),
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.textPrimary),
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ],
+                            ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 16),
-                      const Divider(),
-                      const SizedBox(height: 8),
-
-                      const Text("Booking Timeline", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                      const SizedBox(height: 12),
-
-                      // List representation of status timeline
-                      Expanded(
-                        child: ListView.builder(
-                          itemCount: booking.statusTimeline.length,
-                          itemBuilder: (context, index) {
-                            final log = booking.statusTimeline[index];
-                            final isLast = index == booking.statusTimeline.length - 1;
-                            return _buildTimelineNode(
-                              context,
-                              title: log.split(': ').first,
-                              subtitle: "Logged at ${log.split(': ').length > 1 ? log.split(': ')[1] : ''}",
-                              isCompleted: true,
-                              isLastNode: isLast,
-                            );
-                          },
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
-              ),
-            ],
-          );
-        },
+                const SizedBox(height: 20),
+
+                // Booking Timeline steps sheet
+                Expanded(
+                  flex: 4,
+                  child: Container(
+                    margin: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                    child: GlassCard(
+                      borderRadius: 24,
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    booking.providerBusinessName,
+                                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    "Category: ${booking.category}",
+                                    style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+                                  ),
+                                ],
+                              ),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  const Text("EST. DURATION", style: TextStyle(fontSize: 9, color: AppTheme.textSecondary, fontWeight: FontWeight.bold)),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    _getEtaValue(booking.status),
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppTheme.primaryColor,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          const Divider(height: 24, color: Colors.white12),
+
+                          const Text("Booking Timeline", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppTheme.textPrimary)),
+                          const SizedBox(height: 16),
+
+                          Expanded(
+                            child: ListView.builder(
+                              physics: const BouncingScrollPhysics(),
+                              itemCount: booking.statusTimeline.length,
+                              itemBuilder: (context, index) {
+                                final log = booking.statusTimeline[index];
+                                final isLast = index == booking.statusTimeline.length - 1;
+                                return _buildTimelineNode(
+                                  context,
+                                  title: log.split(': ').first,
+                                  subtitle: "Logged at ${log.split(': ').length > 1 ? log.split(': ')[1] : ''}",
+                                  isCompleted: true,
+                                  isLastNode: isLast,
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -299,7 +336,7 @@ class _BookingTrackingScreenState extends ConsumerState<BookingTrackingScreen> w
     required bool isCompleted,
     required bool isLastNode,
   }) {
-    final primary = Theme.of(context).colorScheme.primary;
+    final primary = AppTheme.successColor;
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -336,11 +373,11 @@ class _BookingTrackingScreenState extends ConsumerState<BookingTrackingScreen> w
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 13,
-                  color: isCompleted ? null : Colors.grey,
+                  color: isCompleted ? AppTheme.textPrimary : AppTheme.textSecondary,
                 ),
               ),
               const SizedBox(height: 2),
-              Text(subtitle, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+              Text(subtitle, style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary)),
             ],
           ),
         ),
@@ -348,3 +385,4 @@ class _BookingTrackingScreenState extends ConsumerState<BookingTrackingScreen> w
     );
   }
 }
+

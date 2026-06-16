@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/models/models.dart';
 import '../../../core/providers/global_providers.dart';
 import '../../provider/presentation/provider_dashboard_screen.dart';
@@ -95,6 +96,13 @@ class _ProviderRegistrationScreenState extends ConsumerState<ProviderRegistratio
     if (!mounted) return;
 
     // Update user state and navigate
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('loggedInUid', widget.user.uid);
+    } catch (e) {
+      debugPrint("Failed to save provider login UID: $e");
+    }
+
     ref.read(authStateProvider.notifier).state = widget.user;
 
     setState(() { _saving = false; });

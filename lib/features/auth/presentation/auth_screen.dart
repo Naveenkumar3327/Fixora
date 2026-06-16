@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/models/models.dart';
 import '../../../core/providers/global_providers.dart';
+import '../../../core/theme/theme.dart';
+import '../../../core/theme/logo.dart';
 import '../../home/presentation/home_screen.dart';
 import '../../provider/presentation/provider_dashboard_screen.dart';
 import '../../admin/presentation/admin_dashboard_screen.dart';
@@ -91,6 +95,13 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       }
     }
 
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('loggedInUid', loggedInUser.uid);
+    } catch (e) {
+      debugPrint("Failed to save login UID: $e");
+    }
+
     ref.read(authStateProvider.notifier).state = loggedInUser;
     
     setState(() { _isLoading = false; });
@@ -129,145 +140,204 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     final role = ref.watch(registrationRoleProvider);
 
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
         title: Text(_isLogin ? "Sign In" : "Create Account"),
       ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: 12),
-              Text(
-                _isLogin
-                    ? "Welcome back! Access your service marketplace."
-                    : "Join Fixora as a ${role.name.toUpperCase()}.",
-                style: Theme.of(context).textTheme.bodyLarge,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 36),
+      body: PremiumBackground(
+        child: SafeArea(
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 10),
+                  // App logo
+                  const Center(
+                    child: FixoraLogo(size: 80),
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  Text(
+                    _isLogin
+                        ? "Welcome back! Access your service marketplace."
+                        : "Join Fixora as a ${role.name.toUpperCase()}.",
+                    style: TextStyle(color: AppTheme.textSecondary, fontSize: 14),
+                    textAlign: TextAlign.center,
+                  )
+                      .animate()
+                      .fadeIn(duration: 400.ms),
+                  
+                  const SizedBox(height: 32),
 
-              Form(
-                key: _formKey,
-                child: Column(
-                  children: [
-                    if (!_isLogin) ...[
-                      TextFormField(
-                        controller: _nameController,
-                        decoration: InputDecoration(
-                          labelText: 'Full Name',
-                          prefixIcon: const Icon(Icons.person_outline),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  // Glass Card Form
+                  GlassCard(
+                    padding: const EdgeInsets.all(20),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        children: [
+                          if (!_isLogin) ...[
+                            TextFormField(
+                              controller: _nameController,
+                              style: const TextStyle(color: AppTheme.textPrimary),
+                              decoration: const InputDecoration(
+                                labelText: 'Full Name',
+                                prefixIcon: Icon(Icons.person_outline, color: AppTheme.textSecondary),
+                              ),
+                              validator: (value) => value == null || value.trim().isEmpty ? 'Please enter your name' : null,
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+                          TextFormField(
+                            controller: _emailController,
+                            style: const TextStyle(color: AppTheme.textPrimary),
+                            decoration: const InputDecoration(
+                              labelText: 'Email Address',
+                              prefixIcon: Icon(Icons.email_outlined, color: AppTheme.textSecondary),
+                            ),
+                            keyboardType: TextInputType.emailAddress,
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) return 'Please enter your email';
+                              if (!value.contains('@')) return 'Please enter a valid email';
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _passwordController,
+                            obscureText: true,
+                            style: const TextStyle(color: AppTheme.textPrimary),
+                            decoration: const InputDecoration(
+                              labelText: 'Password',
+                              prefixIcon: Icon(Icons.lock_outline, color: AppTheme.textSecondary),
+                            ),
+                            validator: (value) => value == null || value.length < 6 ? 'Password must be at least 6 characters' : null,
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                      .animate()
+                      .fadeIn(duration: 500.ms)
+                      .slideY(begin: 0.1, end: 0, curve: Curves.easeOutQuad),
+
+                  const SizedBox(height: 24),
+
+                  // Gradient Submit Button
+                  GestureDetector(
+                    onTap: _isLoading ? null : _submit,
+                    child: Container(
+                      height: 52,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(14),
+                        gradient: LinearGradient(
+                          colors: role == UserRole.customer
+                              ? [AppTheme.primaryColor, AppTheme.secondaryColor]
+                              : role == UserRole.provider
+                                  ? [AppTheme.secondaryColor, const Color(0xFFC084FC)]
+                                  : [AppTheme.warningColor, const Color(0xFFFDBA74)],
                         ),
-                        validator: (value) => value == null || value.trim().isEmpty ? 'Please enter your name' : null,
+                        boxShadow: [
+                          BoxShadow(
+                            color: (role == UserRole.customer
+                                    ? AppTheme.primaryColor
+                                    : role == UserRole.provider
+                                        ? AppTheme.secondaryColor
+                                        : AppTheme.warningColor)
+                                .withOpacity(0.35),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          )
+                        ],
                       ),
-                      const SizedBox(height: 16),
+                      child: Center(
+                        child: _isLoading
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                              )
+                            : Text(
+                                _isLogin ? "Sign In" : "Sign Up",
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                      ),
+                    ),
+                  )
+                      .animate()
+                      .scale(begin: const Offset(0.98, 0.98), duration: 150.ms),
+
+                  const SizedBox(height: 16),
+
+                  TextButton(
+                    onPressed: () {
+                      setState(() {
+                        _isLogin = !_isLogin;
+                      });
+                    },
+                    child: Text(
+                      _isLogin ? "Don't have an account? Sign Up" : "Already have an account? Sign In",
+                      style: const TextStyle(color: AppTheme.primaryColor, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+                  
+                  // Mock accounts header
+                  Row(
+                    children: [
+                      const Expanded(child: Divider(color: Colors.white12)),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Text(
+                          "OR MOCK LOGINS FOR TESTING",
+                          style: TextStyle(fontSize: 10, color: AppTheme.textSecondary, letterSpacing: 1),
+                        ),
+                      ),
+                      const Expanded(child: Divider(color: Colors.white12)),
                     ],
-                    TextFormField(
-                      controller: _emailController,
-                      decoration: InputDecoration(
-                        labelText: 'Email Address',
-                        prefixIcon: const Icon(Icons.email_outlined),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      keyboardType: TextInputType.emailAddress,
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) return 'Please enter your email';
-                        if (!value.contains('@')) return 'Please enter a valid email';
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _passwordController,
-                      obscureText: true,
-                      decoration: InputDecoration(
-                        labelText: 'Password',
-                        prefixIcon: const Icon(Icons.lock_outline),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      validator: (value) => value == null || value.length < 6 ? 'Password must be at least 6 characters' : null,
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 24),
-
-              ElevatedButton(
-                onPressed: _isLoading ? null : _submit,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                child: _isLoading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                      )
-                    : Text(_isLogin ? "Sign In" : "Sign Up"),
-              ),
-
-              const SizedBox(height: 20),
-
-              TextButton(
-                onPressed: () {
-                  setState(() {
-                    _isLogin = !_isLogin;
-                  });
-                },
-                child: Text(
-                  _isLogin ? "Don't have an account? Sign Up" : "Already have an account? Sign In",
-                ),
-              ),
-
-              const SizedBox(height: 24),
-              const Row(
-                children: [
-                  Expanded(child: Divider()),
-                  Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 12),
-                    child: Text("OR MOCK LOGINS FOR TESTING", style: TextStyle(fontSize: 10, color: Colors.grey)),
                   ),
-                  Expanded(child: Divider()),
+                  const SizedBox(height: 16),
+
+                  // Mock Account shortcuts
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.center,
+                    children: [
+                      _buildMockChip("Demo Customer", () => _autofill("customer@fixora.com", UserRole.customer), Icons.person, AppTheme.primaryColor),
+                      _buildMockChip("Demo Electrician", () => _autofill("rajesh@electrofix.com", UserRole.provider), Icons.bolt, AppTheme.secondaryColor),
+                      _buildMockChip("Demo Plumber", () => _autofill("amit@superplumb.com", UserRole.provider), Icons.water_drop, AppTheme.secondaryColor),
+                      _buildMockChip("Demo Admin", () => _autofill("admin@fixora.com", UserRole.admin), Icons.admin_panel_settings, AppTheme.warningColor),
+                    ],
+                  )
+                      .animate()
+                      .fadeIn(delay: 200.ms, duration: 400.ms),
                 ],
               ),
-              const SizedBox(height: 16),
-
-              // Mock Account shortcuts
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                alignment: WrapAlignment.center,
-                children: [
-                  ActionChip(
-                    avatar: const Icon(Icons.person, size: 16),
-                    label: const Text("Demo Customer"),
-                    onPressed: () => _autofill("customer@fixora.com", UserRole.customer),
-                  ),
-                  ActionChip(
-                    avatar: const Icon(Icons.bolt, size: 16),
-                    label: const Text("Demo Electrician"),
-                    onPressed: () => _autofill("rajesh@electrofix.com", UserRole.provider),
-                  ),
-                  ActionChip(
-                    avatar: const Icon(Icons.water_drop, size: 16),
-                    label: const Text("Demo Plumber"),
-                    onPressed: () => _autofill("amit@superplumb.com", UserRole.provider),
-                  ),
-                  ActionChip(
-                    avatar: const Icon(Icons.admin_panel_settings, size: 16),
-                    label: const Text("Demo Admin"),
-                    onPressed: () => _autofill("admin@fixora.com", UserRole.admin),
-                  ),
-                ],
-              ),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
+
+  Widget _buildMockChip(String label, VoidCallback onPressed, IconData icon, Color color) {
+    return ActionChip(
+      avatar: Icon(icon, size: 16, color: color),
+      label: Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+      backgroundColor: AppTheme.darkCard.withOpacity(0.4),
+      side: BorderSide(color: Colors.white.withOpacity(0.08), width: 1.2),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      onPressed: onPressed,
+    );
+  }
 }
+
