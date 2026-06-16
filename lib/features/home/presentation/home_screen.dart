@@ -96,14 +96,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         Geolocator.distanceBetween(_lastStreamLat!, _lastStreamLng!, _currentPos!.latitude, _currentPos!.longitude) > 50) {
       
       final dbSvc = ref.read(databaseServiceProvider);
-      _nearbyProvidersStream = dbSvc.getNearbyProvidersStream(
-        _currentPos!.latitude,
-        _currentPos!.longitude,
-        _selectedCategory,
-      );
-      _lastStreamLat = _currentPos!.latitude;
-      _lastStreamLng = _currentPos!.longitude;
-      _lastStreamCategory = _selectedCategory;
+      setState(() {
+        _nearbyProvidersStream = dbSvc.getNearbyProvidersStream(
+          _currentPos!.latitude,
+          _currentPos!.longitude,
+          _selectedCategory,
+        );
+        _lastStreamLat = _currentPos!.latitude;
+        _lastStreamLng = _currentPos!.longitude;
+        _lastStreamCategory = _selectedCategory;
+      });
     }
   }
 
@@ -183,7 +185,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Widget _buildMarketplaceBody(AppUser? currentUser, DatabaseService dbSvc) {
-    _updateProvidersStream();
     final nearbyStream = _nearbyProvidersStream ?? Stream<List<ProviderProfile>>.value([]);
 
     return CustomScrollView(
@@ -480,6 +481,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           setState(() {
                             _selectedCategory = isSelected ? "" : cat['name'];
                           });
+                          _updateProvidersStream();
                         },
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 250),

@@ -20,6 +20,7 @@ class ProviderDashboardScreen extends ConsumerStatefulWidget {
 class _ProviderDashboardScreenState extends ConsumerState<ProviderDashboardScreen> {
   bool _updatingStatus = false;
   late Stream<List<Booking>> _bookingsStream;
+  late Future<ProviderProfile?> _profileFuture;
 
   @override
   void initState() {
@@ -28,8 +29,10 @@ class _ProviderDashboardScreenState extends ConsumerState<ProviderDashboardScree
     final user = ref.read(authStateProvider);
     if (user != null) {
       _bookingsStream = dbSvc.getProviderBookingsStream(user.uid);
+      _profileFuture = dbSvc.getProviderProfile(user.uid);
     } else {
       _bookingsStream = const Stream.empty();
+      _profileFuture = Future.value(null);
     }
   }
 
@@ -52,7 +55,10 @@ class _ProviderDashboardScreenState extends ConsumerState<ProviderDashboardScree
     await dbSvc.createOrUpdateProviderProfile(updated);
     
     if (mounted) {
-      setState(() { _updatingStatus = false; });
+      setState(() { 
+        _updatingStatus = false; 
+        _profileFuture = Future.value(updated);
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
@@ -109,7 +115,7 @@ class _ProviderDashboardScreenState extends ConsumerState<ProviderDashboardScree
       body: PremiumBackground(
         child: SafeArea(
           child: FutureBuilder<ProviderProfile?>(
-            future: dbSvc.getProviderProfile(user.uid),
+            future: _profileFuture,
             builder: (context, profileSnapshot) {
               if (profileSnapshot.connectionState == ConnectionState.waiting) {
                 return const Center(

@@ -6,14 +6,26 @@ import '../../../core/providers/global_providers.dart';
 import '../../../core/theme/theme.dart';
 import 'chat_screen.dart';
 
-class ChatListScreen extends ConsumerWidget {
+class ChatListScreen extends ConsumerStatefulWidget {
   final String currentUserId;
   const ChatListScreen({super.key, required this.currentUserId});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final dbSvc = ref.watch(databaseServiceProvider);
+  ConsumerState<ChatListScreen> createState() => _ChatListScreenState();
+}
 
+class _ChatListScreenState extends ConsumerState<ChatListScreen> {
+  late Stream<List<AppUser>> _chatPartnersStream;
+
+  @override
+  void initState() {
+    super.initState();
+    final dbSvc = ref.read(databaseServiceProvider);
+    _chatPartnersStream = dbSvc.getActiveChatPartnersStream(widget.currentUserId);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
@@ -21,7 +33,7 @@ class ChatListScreen extends ConsumerWidget {
       ),
       body: PremiumBackground(
         child: StreamBuilder<List<AppUser>>(
-          stream: dbSvc.getActiveChatPartnersStream(currentUserId),
+          stream: _chatPartnersStream,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());
@@ -82,7 +94,7 @@ class ChatListScreen extends ConsumerWidget {
                         Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (context) => ChatScreen(
-                              senderId: currentUserId,
+                              senderId: widget.currentUserId,
                               partnerName: partner.name,
                               receiverId: partner.uid,
                             ),
